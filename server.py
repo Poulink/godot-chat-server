@@ -14,14 +14,9 @@ async def handler(websocket):
         clients.remove(websocket)
 
 
-# 👇 Вот это решает проблему HEAD запросов Render
 async def process_request(path, request_headers):
-    if request_headers.get("Method", "") == "HEAD":
-        return (
-            200,
-            [("Content-Type", "text/plain")],
-            b"OK",
-        )
+    # Render health check
+    return 200, [], b"OK"
 
 
 async def main():
@@ -34,7 +29,7 @@ async def main():
         process_request=process_request
     ):
         print("Server started")
-        await asyncio.Future()  # работает вечно
+        await asyncio.Future()  # работает бесконечно
 
 
 asyncio.run(main())
