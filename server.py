@@ -1,7 +1,6 @@
 import asyncio
 import os
-from websockets.server import serve
-from websockets.exceptions import ConnectionClosedOK
+import websockets
 
 clients = set()
 
@@ -11,32 +10,31 @@ async def handler(websocket):
         async for message in websocket:
             for client in clients:
                 await client.send(message)
-    except ConnectionClosedOK:
-        pass
     finally:
         clients.remove(websocket)
 
-async def health_check(reader, writer):
-    request = await reader.read(1024)
-    if b"HEAD" in request or b"GET / " in request:
-        response = (
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: 2\r\n"
-            "\r\nOK"
+
+# 👇 Вот это решает проблему HEAD запросов Render
+async def process_request(path, request_headers):
+    if request_headers.get("Method", "") == "HEAD":
+        return (
+            200,
+            [("Content-Type", "text/plain")],
+            b"OK",
         )
-        writer.write(response.encode())
-        await writer.drain()
-    writer.close()
+
 
 async def main():
     port = int(os.environ.get("PORT", 10000))
 
-    ws_server = await serve(handler, "0.0.0.0", port)
-    http_server = await asyncio.start_server(health_check, "0.0.0.0", port)
+    async with websockets.serve(
+        handler,
+        "0.0.0.0",
+        port,
+        process_request=process_request
+    ):
+        print("Server started")
+        await asyncio.Future()  # работает вечно
 
-    print("Server started")
-    await asyncio.gather(ws_server.wait_closed(), http_server.serve_forever())
 
 asyncio.run(main())
-
